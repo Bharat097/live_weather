@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% load leaflet_tags %}
+
+{% block content_head %}
+    {% leaflet_js %}
+    {% leaflet_css %}
+{% endblock %}
+
+{% block content_body %}
+
+<style>
+
+    .leaflet-container {  /* all maps */
+        height: 475px;
+    }
+
+    #specialbigmap {
+        height: 800px;
+    }
+
+    /* Resize the "display_raw" textbox */
+    .django-leaflet-raw-textarea {
+        width: 100%;
+    }
+
+</style>
+
+<br>
+<div class="container">
+
+    <h3>Check Weather</h3>
+    <br>
+
+    <form action="" method="POST">
+        {% csrf_token %}
+        <div class="form-row align-items-center">
+          <div class="col-sm-3 my-1">
+            <label class="sr-only" for="latitude">Name</label>
+            <input type="text" class="form-control" id="name" name="name" placeholder="Name">
+          </div>
+
+          <div class="col-sm-3 my-1">
+            <label class="sr-only" for="latitude">Latitude</label>
+            <input type="number" class="form-control" id="latitude" name="latitude" placeholder="Latitude" step="0.0001">
+          </div>
+
+          <div class="col-sm-3 my-1">
+            <label class="sr-only" for="longitude">Longitude</label>
+            <input type="number" class="form-control" id="longitude" name="longitude" placeholder="Longitude" step="0.0001">
+          </div>
+          
+          <div class="col-auto my-1">
+            <input type="submit" class="btn btn-primary" id="fetch_weather">
+          </div>
+        </div>
+    </form>
+
+</div>
+
+<br>
+<br>
+<br>
+
+<div class="container">
+
+    <div class="alert alert-danger" id="add_alert_error" role="alert" style="display: none;"></div>
+    <div class="alert alert-success" id="add_alert_success" role="alert" style="display: none;"></div>
+
+    <div class="card">
+        <div class="card-header">
+          Saved Locations(Click on Marker to fetch Weather)
+        </div>
+        <div class="card-body">
+          <blockquote class="blockquote mb-0" id="resp_content">
+            {% leaflet_map "main" callback="main_map_init" %}
+          </blockquote>
+        </div>
+      </div>
+
+</div>
+<br>
+<br>
+
+{% endblock %}
+
+{% block content_script %}
+
+    <script>
+
+        function main_map_init (map, options) {
+          var dataurl = '{% url "geojson" %}';
+          
+          $.getJSON(dataurl, function (data) {
+
+            function onEachFeature(feature, layer) {
+              if (feature.properties) {
+                var z = document.createElement('p'); // is a node
+                z.innerHTML = "Name: " + feature.properties.name + "<br> Lat: " + feature.geometry.coordinates[1] + "<br> Long: " + feature.geometry.coordinates[0];
+                layer.bindPopup(z);
+                layer.data = {name: feature.properties.name, lat: feature.geometry.coordinates[1], long: feature.geometry.coordinates[0]};
+              }
+            }
+
+            L.geoJSON(data.features, {
+              onEachFeature: onEachFeature
+            }).addTo(map).on("click", grpClick);
+
+            function grpClick(event) {
+              //console.log(event.layer.data);
+              //event.preventDefault();
+              let csrf = $("input[name=csrfmiddlewaretoken]").val()
+              $.ajax({
+                  url: 'fetch_weather',
+                  type: 'POST',
+                  data: {
+                      latitude: event.layer.data.lat,
+                      longitude: event.layer.data.long,
+                      name: event.layer.data.name,
+                      csrfmiddlewaretoken: csrf
+                  },
+                  success: function(response){
+                      $("#add_alert_error").hide()
+                      $("#add_alert_success").html("Name: " + response.data.name + "<br>Temprature: " + response.data.temp + "<br>Wind Speed: " + response.data.wind)
+                      $("#add_alert_success").show()
+                  },
+                  error: function(response) {
+                      $("#add_alert_error").html("Failed fetch weather data: Error: " + response.responseJSON.data)
+                      $("#add_alert_error").show()
+                      $("#add_alert_success").hide()
+                  }
+              });
+
+            }
+            
+          });
+
+        }
+    
+    </script>
+
+{% endblock %}
